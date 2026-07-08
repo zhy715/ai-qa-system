@@ -13,12 +13,16 @@ from app.models.schemas import (
     DocumentListResponse,
     QueryRequest,
     QueryResponse,
+    ConversationInfo,
+    ConversationListResponse,
+    ConversationDetail,
 )
 from app.services.document_service import DocumentService, SUPPORTED_EXTENSIONS
 from app.services.vector_service import VectorService
 from app.services.llm_service import LLMService
+from app.services.conversation_service import ConversationService
 
-app = FastAPI(title="AI知识库问答系统", version="0.3.0")
+app = FastAPI(title="AI知识库问答系统", version="0.4.0")
 
 # CORS — 允许前端跨域访问
 app.add_middleware(
@@ -33,6 +37,7 @@ app.add_middleware(
 doc_service = DocumentService(upload_dir="uploads")
 vec_service = VectorService(persist_dir="chroma_db")
 llm_service = LLMService()
+conv_service = ConversationService(data_dir="conversations")
 
 
 @app.get("/")
@@ -45,10 +50,12 @@ def root():
 
 @app.get("/health")
 def health():
+    convs = conv_service.list_all()
     return {
         "status": "ok",
         "chunks_stored": vec_service.count(),
         "llm_ready": llm_service.is_ready(),
+        "conversations": len(convs),
     }
 
 
@@ -117,13 +124,21 @@ async def list_documents():
     return DocumentListResponse(documents=documents, total=len(documents))
 
 
-# ==================== 问答接口（RAG 全链路）====================
+# ==================== 问答接口（RAG + 多轮对话）====================
 
 @app.post("/query", response_model=QueryResponse)
 async def query_knowledge(request: QueryRequest):
-    """RAG 问答：检索知识库 → LLM 生成回答"""
+    """RAG 问答：检索知识库 → 查对话历史 → LLM 生成回答"""
     if vec_service.count() == 0:
         raise HTTPException(status_code=400, detail="知识库为空，请先上传文档")
+
+    # 0. 对话管理：没有 ID → 新建；有 ID → 加载历史
+    conversation_id = request.conversation_id
+    if not conversation_id:
+        conv = conv_service.create()
+        conversation_id = conv.id
+    elif not conv_service.get(conversation_id):
+        raise HTTPException(status_code=404, detail=f"对话不存在: {conversation_id}")
 
     # 1. 检索相关文档片段
     result = vec_service.query(request.question, top_k=request.top_k)
@@ -135,20 +150,62 @@ async def query_knowledge(request: QueryRequest):
             question=request.question,
             answer="未找到相关内容",
             sources=[],
+            conversation_id=conversation_id,
         )
 
-    # 2. 列出来源文件（去重）
+    # 2. 列出来源文件
     sources = list(set(m["source"] for m in metadatas if m))
 
-    # 3. 用 LLM 基于检索结果生成回答
+    # 3. 加载对话历史（最近 10 轮）
+    history = conv_service.get_messages(conversation_id, limit=10)
+    history_dicts = [{"role": h.role, "content": h.content} for h in history]
+
+    # 4. LLM 生成回答
     if llm_service.is_ready():
-        answer = llm_service.generate_answer(request.question, documents)
+        answer = llm_service.generate_answer(request.question, documents, history_dicts)
     else:
-        # 未配置 API Key，退回为直接返回文档片段
         answer = "⚠️ 请配置 DeepSeek API Key 以启用 AI 回答\n\n" + "\n\n---\n\n".join(documents)
+
+    # 5. 保存本轮对话
+    conv_service.add_message(conversation_id, "user", request.question)
+    conv_service.add_message(conversation_id, "assistant", answer, sources)
 
     return QueryResponse(
         question=request.question,
         answer=answer,
         sources=sources,
+        conversation_id=conversation_id,
     )
+
+
+# ==================== 对话管理接口 ====================
+
+@app.post("/conversations", response_model=ConversationDetail)
+async def create_conversation():
+    """创建新对话"""
+    return conv_service.create()
+
+
+@app.get("/conversations", response_model=ConversationListResponse)
+async def list_conversations():
+    """获取所有对话列表"""
+    convs = conv_service.list_all()
+    return ConversationListResponse(conversations=convs, total=len(convs))
+
+
+@app.get("/conversations/{conversation_id}", response_model=ConversationDetail)
+async def get_conversation(conversation_id: str):
+    """获取某个对话的完整内容"""
+    conv = conv_service.get(conversation_id)
+    if not conv:
+        raise HTTPException(status_code=404, detail="对话不存在")
+    return conv
+
+
+@app.delete("/conversations/{conversation_id}")
+async def delete_conversation(conversation_id: str):
+    """删除对话"""
+    ok = conv_service.delete(conversation_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="对话不存在")
+    return {"ok": True}

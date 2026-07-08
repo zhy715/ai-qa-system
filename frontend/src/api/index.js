@@ -35,12 +35,30 @@ export function getDocuments() {
   return request('/documents');
 }
 
-/** RAG 问答 */
-export function queryKnowledge(question, topK = 3) {
+/** RAG 问答（支持多轮对话） */
+export function queryKnowledge(question, topK = 3, conversationId = null) {
   return request('/query', {
     method: 'POST',
-    body: JSON.stringify({ question, top_k: topK }),
+    body: JSON.stringify({
+      question,
+      top_k: topK,
+      conversation_id: conversationId,
+    }),
   });
+}
+
+/** 对话管理 */
+export function createConversation() {
+  return request('/conversations', { method: 'POST' });
+}
+export function getConversations() {
+  return request('/conversations');
+}
+export function getConversation(id) {
+  return request(`/conversations/${id}`);
+}
+export function deleteConversation(id) {
+  return request(`/conversations/${id}`, { method: 'DELETE' });
 }
 
 /** 健康检查 */

@@ -1,6 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
-import { Upload, FileText, Database, CheckCircle2, AlertCircle, Loader2, Cloud } from 'lucide-react';
-import { uploadDocument, getDocuments } from '../api';
+import {
+  Upload, FileText, Database, CheckCircle2, AlertCircle, Loader2, Cloud,
+  MessageSquare, Plus, Trash2,
+} from 'lucide-react';
+import { uploadDocument, getDocuments, getConversations, deleteConversation } from '../api';
 
 const SIDEBAR_PX = 320;
 
@@ -144,10 +147,80 @@ const styles = {
     whiteSpace: 'nowrap',
     fontWeight: 500,
   },
+  // Conversation list
+  sectionRow: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  newBtn: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    border: 'none',
+    background: 'transparent',
+    color: '#a8a29e',
+    cursor: 'pointer',
+    transition: 'all 120ms',
+  },
+  convList: {
+    listStyle: 'none',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 2,
+    padding: 0,
+  },
+  convItem: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    padding: '8px 10px',
+    borderRadius: 8,
+    fontSize: 13,
+    color: '#44403c',
+    cursor: 'pointer',
+    transition: 'background 120ms',
+    position: 'relative',
+  },
+  convIcon: {
+    color: '#a8a29e',
+    flexShrink: 0,
+  },
+  convTitle: {
+    flex: 1,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    fontWeight: 500,
+  },
+  convDate: {
+    fontSize: 11,
+    color: '#c4bfb8',
+    flexShrink: 0,
+  },
+  deleteBtn: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    border: 'none',
+    background: 'transparent',
+    color: '#c4bfb8',
+    cursor: 'pointer',
+    flexShrink: 0,
+    opacity: 0,
+    transition: 'all 120ms',
+  },
 };
 
-export default function Sidebar({ onRefresh }) {
+export default function Sidebar({ conversationId, onSelectConversation, onNewConversation }) {
   const [documents, setDocuments] = useState([]);
+  const [conversations, setConversations] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
   const [llmReady, setLlmReady] = useState(null);
@@ -173,7 +246,19 @@ export default function Sidebar({ onRefresh }) {
     }
   };
 
-  useEffect(() => { fetchDocs(); fetchHealth(); }, []);
+  const fetchConvs = async () => {
+    try {
+      const data = await getConversations();
+      setConversations(data.conversations || []);
+    } catch { /* ok */ }
+  };
+
+  useEffect(() => { fetchDocs(); fetchHealth(); fetchConvs(); }, []);
+
+  // 每次上传后也刷新对话列表（当 ChatArea 产生新对话时，Sidebar 会被刷新）
+  useEffect(() => {
+    if (conversationId !== undefined) fetchConvs();
+  }, [conversationId]);
 
   const doUpload = async (file) => {
     if (!file) return;
@@ -222,6 +307,26 @@ export default function Sidebar({ onRefresh }) {
     doUpload(file);
   };
 
+  const handleDeleteConv = async (e, id) => {
+    e.stopPropagation();
+    try {
+      await deleteConversation(id);
+      if (conversationId === id) onNewConversation();
+      fetchConvs();
+    } catch { /* ok */ }
+  };
+
+  const dateLabel = (iso) => {
+    try {
+      const d = new Date(iso);
+      const now = new Date();
+      const diff = now - d;
+      if (diff < 3600000) return '刚刚';
+      if (diff < 86400000) return `${Math.floor(diff / 3600000)} 小时前`;
+      return d.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
+    } catch { return ''; }
+  };
+
   return (
     <aside style={styles.sidebar}>
       {/* Header */}
@@ -244,6 +349,43 @@ export default function Sidebar({ onRefresh }) {
           )}
           <span style={{ fontSize: 11, color: '#a8a29e' }}>{chunks} 个文本块</span>
         </div>
+      </div>
+
+      {/* Conversations */}
+      <div style={styles.section}>
+        <div style={styles.sectionRow}>
+          <h2 style={styles.sectionTitle}>对话历史</h2>
+          <button style={styles.newBtn} onClick={onNewConversation} title="新建对话">
+            <Plus size={16} />
+          </button>
+        </div>
+        {conversations.length === 0 ? (
+          <p style={styles.emptyText}>暂无对话</p>
+        ) : (
+          <ul style={styles.convList}>
+            {conversations.map((conv) => (
+              <li
+                key={conv.id}
+                style={{
+                  ...styles.convItem,
+                  background: conv.id === conversationId ? '#f0ede8' : 'transparent',
+                }}
+                onClick={() => onSelectConversation(conv.id)}
+              >
+                <MessageSquare size={14} style={styles.convIcon} />
+                <span style={styles.convTitle}>{conv.title}</span>
+                <span style={styles.convDate}>{dateLabel(conv.updated_at)}</span>
+                <button
+                  style={styles.deleteBtn}
+                  onClick={(e) => handleDeleteConv(e, conv.id)}
+                  title="删除"
+                >
+                  <Trash2 size={12} />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
 
       {/* Upload Zone */}

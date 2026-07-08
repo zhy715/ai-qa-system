@@ -1,13 +1,33 @@
 import { useState, useRef, useEffect } from 'react';
 import { Send, Loader2, MessageSquare } from 'lucide-react';
 import ChatMessage from './ChatMessage';
-import { queryKnowledge } from '../api';
+import { queryKnowledge, getConversation } from '../api';
 
-export default function ChatArea() {
+export default function ChatArea({ conversationId, onConversationCreated }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [currentConvId, setCurrentConvId] = useState(conversationId);
   const messagesEndRef = useRef(null);
+
+  // 切换对话时重新加载
+  useEffect(() => {
+    setCurrentConvId(conversationId);
+    if (conversationId) {
+      loadConversation(conversationId);
+    } else {
+      setMessages([]);
+    }
+  }, [conversationId]);
+
+  const loadConversation = async (id) => {
+    try {
+      const data = await getConversation(id);
+      setMessages(data.messages || []);
+    } catch {
+      setMessages([]);
+    }
+  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -25,9 +45,14 @@ export default function ChatArea() {
     setLoading(true);
 
     try {
-      const data = await queryKnowledge(question);
+      const data = await queryKnowledge(question, 3, currentConvId);
 
-      // Check if the answer is the LLM fallback (no API key)
+      // 首次发送时后端会创建新对话，拿到 conversation_id
+      if (data.conversation_id && !currentConvId) {
+        setCurrentConvId(data.conversation_id);
+        if (onConversationCreated) onConversationCreated(data.conversation_id);
+      }
+
       const isFallback = data.answer.startsWith('⚠️ 请配置') || data.answer.startsWith('⚠️ LLM');
 
       const botMsg = {

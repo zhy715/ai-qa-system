@@ -8,6 +8,7 @@ __pycache__/
 *.pth
 chroma_db/
 uploads/
+conversations/
 test.pdf
 frontend/node_modules/
 frontend/dist/

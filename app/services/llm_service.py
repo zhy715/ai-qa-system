@@ -10,13 +10,34 @@ from langchain_openai import ChatOpenAI
 load_dotenv()
 
 
-# RAG 提示词模板
+# RAG 提示词模板（无历史）
 RAG_PROMPT = """你是一个专业的知识库助手。请根据以下参考资料回答用户的问题。
 
 ## 规则
 - 只根据参考资料回答，不要编造信息
 - 如果参考资料不足以回答问题，诚实地说"根据现有资料，我无法回答这个问题"
 - 回答要简洁、有条理，使用中文
+
+## 参考资料
+{context}
+
+## 用户问题
+{question}
+
+## 回答
+"""
+
+# RAG 提示词模板（带对话历史）
+RAG_PROMPT_WITH_HISTORY = """你是一个专业的知识库助手。请根据以下参考资料和对话历史回答用户的问题。
+
+## 规则
+- 只根据参考资料回答，不要编造信息
+- 如果参考资料不足以回答问题，诚实地说"根据现有资料，我无法回答这个问题"
+- 理解上下文：结合对话历史理解用户的追问、代词指代等
+- 回答要简洁、有条理，使用中文
+
+## 对话历史
+{history}
 
 ## 参考资料
 {context}
@@ -48,29 +69,43 @@ class LLMService:
             )
 
         self.prompt = ChatPromptTemplate.from_template(RAG_PROMPT)
+        self.prompt_with_history = ChatPromptTemplate.from_template(RAG_PROMPT_WITH_HISTORY)
 
     def is_ready(self) -> bool:
         """检查 API Key 是否已配置"""
         return self.llm is not None
 
-    def generate_answer(self, question: str, documents: List[str]) -> str:
-        """基于检索到的文档生成回答"""
+    def generate_answer(
+        self,
+        question: str,
+        documents: List[str],
+        history: List[dict] | None = None,
+    ) -> str:
+        """基于检索到的文档 + 对话历史生成回答"""
         if not self.llm:
             return "⚠️ LLM 未配置：请在 .env 文件中设置你的 DEEPSEEK_API_KEY"
 
         if not documents:
             return "未检索到相关文档，无法回答该问题。"
 
-        # 拼接文档作为上下文
         context = "\n\n---\n\n".join(documents)
 
-        # 构建消息
-        messages = self.prompt.format_messages(
-            context=context,
-            question=question,
-        )
+        # 有历史 → 带历史模板；无历史 → 简单模板
+        if history and len(history) > 0:
+            history_text = "\n".join(
+                f"{'用户' if m['role'] == 'user' else '助手'}: {m['content']}"
+                for m in history
+            )
+            messages = self.prompt_with_history.format_messages(
+                context=context,
+                question=question,
+                history=history_text,
+            )
+        else:
+            messages = self.prompt.format_messages(
+                context=context,
+                question=question,
+            )
 
-        # 调用大模型
         response = self.llm.invoke(messages)
-
         return response.content
