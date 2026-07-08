@@ -45,39 +45,45 @@ export default function ChatArea({ conversationId, onConversationCreated }) {
     const question = input.trim();
     if (!question || loading) return;
 
-    // Add user message
-    const userMsg = { role: 'user', content: question };
-    setMessages((prev) => [...prev, userMsg]);
+    // 先清空输入框，让用户知道消息已发送
     setInput('');
+
+    // 立即添加用户消息并标记加载中
+    const userMsg = { role: 'user', content: question };
+    setMessages((prev) => {
+      console.log('添加用户消息:', question, '当前消息数:', prev.length);
+      return [...prev, userMsg];
+    });
     setLoading(true);
 
     try {
-      const data = await queryKnowledge(question, 3, currentConvId);
+      const cid = currentConvId;  // 快照，避免后续状态变更影响
+      const data = await queryKnowledge(question, 3, cid);
 
-      // 首次发送时后端创建新对话，返回 conversation_id
-      if (data.conversation_id && !currentConvId) {
-        setCurrentConvId(data.conversation_id);
-        internalCreateRef.current = true;  // 阻止 useEffect 重复加载
-        if (onConversationCreated) onConversationCreated(data.conversation_id);
+      // 后端创建了新对话
+      const newCid = data.conversation_id;
+      if (newCid && !cid) {
+        setCurrentConvId(newCid);
+        internalCreateRef.current = true;
+        if (onConversationCreated) onConversationCreated(newCid);
       }
-
-      const isFallback = data.answer.startsWith('⚠️ 请配置') || data.answer.startsWith('⚠️ LLM');
 
       const botMsg = {
         role: 'assistant',
         content: data.answer,
         sources: data.sources || [],
-        isFallback,
       };
-      setMessages((prev) => [...prev, botMsg]);
+      setMessages((prev) => {
+        console.log('添加AI回答, 当前消息数:', prev.length);
+        return [...prev, botMsg];
+      });
     } catch (err) {
-      const errorMsg = {
+      setMessages((prev) => [...prev, {
         role: 'assistant',
         content: `❌ 请求失败：${err.message}\n\n请确认后端服务已启动（http://localhost:8000）`,
         sources: [],
         isError: true,
-      };
-      setMessages((prev) => [...prev, errorMsg]);
+      }]);
     } finally {
       setLoading(false);
     }
