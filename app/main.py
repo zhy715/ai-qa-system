@@ -4,6 +4,7 @@ import shutil
 from typing import List
 
 from fastapi import FastAPI, File, UploadFile, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.models.schemas import (
@@ -18,6 +19,15 @@ from app.services.vector_service import VectorService
 from app.services.llm_service import LLMService
 
 app = FastAPI(title="AI知识库问答系统", version="0.3.0")
+
+# CORS — 允许前端跨域访问
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # 初始化服务（全局单例）
 doc_service = DocumentService(upload_dir="uploads")
