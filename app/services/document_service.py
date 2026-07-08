@@ -52,9 +52,25 @@ class DocumentService:
         return ""
 
     def _parse_docx(self, path: str) -> str:
-        from docx import Document
-        doc = Document(path)
-        return "\n".join(p.text for p in doc.paragraphs if p.text)
+        try:
+            from docx import Document
+            doc = Document(path)
+            parts = []
+            # 段落文字
+            for p in doc.paragraphs:
+                if p.text and p.text.strip():
+                    parts.append(p.text.strip())
+            # 表格文字
+            for table in doc.tables:
+                for row in table.rows:
+                    row_text = " | ".join(
+                        cell.text.strip() for cell in row.cells if cell.text.strip()
+                    )
+                    if row_text:
+                        parts.append(row_text)
+            return "\n".join(parts)
+        except Exception as e:
+            raise ValueError(f"Word 文档解析失败: {e}")
 
     def _parse_csv(self, path: str) -> str:
         rows = []
@@ -95,7 +111,12 @@ class DocumentService:
         parser = parsers.get(ext)
         if parser is None:
             raise ValueError(f"不支持的文件格式: {ext}")
-        return parser(file_path)
+        try:
+            return parser(file_path)
+        except ValueError:
+            raise  # 重新抛出已包装的错误
+        except Exception as e:
+            raise ValueError(f"文档解析失败（{ext}）: {e}")
 
     # ─── 文本分块 ─────────────────────────────────────
 
