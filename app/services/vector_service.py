@@ -9,24 +9,33 @@ from chromadb.utils import embedding_functions
 class VectorService:
     """向量数据库服务：负责文档的向量化存储和检索
 
-    使用 ChromaDB 作为向量数据库，自带 ONNX 嵌入模型，无需 API Key。
+    使用 ChromaDB + 多语言 sentence-transformers 模型，支持中英文语义检索。
     """
+
+    MULTILINGUAL_MODEL = "paraphrase-multilingual-MiniLM-L12-v2"
 
     def __init__(self, persist_dir: str = "chroma_db"):
         self.persist_dir = persist_dir
         os.makedirs(persist_dir, exist_ok=True)
 
-        # 创建持久化客户端
         self.client = chromadb.PersistentClient(path=persist_dir)
 
-        # 使用内置的 ONNX 嵌入模型（all-MiniLM-L6-v2）
-        self.embedding_fn = embedding_functions.DefaultEmbeddingFunction()
+        # 多语言嵌入模型（支持中文 + 50+ 语言）
+        self.embedding_fn = embedding_functions.SentenceTransformerEmbeddingFunction(
+            model_name=self.MULTILINGUAL_MODEL,
+        )
 
-        # 获取或创建集合
+        # 集合名加上模型后缀，避免和旧英文模型的向量维度不兼容
+        collection_name = "knowledge_base_multilingual"
+        try:
+            self.client.delete_collection("knowledge_base")
+        except Exception:
+            pass
+
         self.collection = self.client.get_or_create_collection(
-            name="knowledge_base",
+            name=collection_name,
             embedding_function=self.embedding_fn,
-            metadata={"description": "AI知识库"},
+            metadata={"description": "AI知识库（多语言）", "model": self.MULTILINGUAL_MODEL},
         )
 
     def add_documents(self, chunks: List[Any]) -> int:
