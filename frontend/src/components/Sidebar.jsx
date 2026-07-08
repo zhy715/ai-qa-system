@@ -278,7 +278,6 @@ export default function Sidebar({
       setError('');
       await fetchDocs();
       await fetchHealth();
-      if (onRefresh) onRefresh();
     } catch (err) {
       setError(err.message || '上传失败');
     } finally {
