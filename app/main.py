@@ -15,22 +15,31 @@ from app.models.schemas import (
 )
 from app.services.document_service import DocumentService
 from app.services.vector_service import VectorService
+from app.services.llm_service import LLMService
 
-app = FastAPI(title="AI知识库问答系统", version="0.2.0")
+app = FastAPI(title="AI知识库问答系统", version="0.3.0")
 
 # 初始化服务（全局单例）
 doc_service = DocumentService(upload_dir="uploads")
 vec_service = VectorService(persist_dir="chroma_db")
+llm_service = LLMService()
 
 
 @app.get("/")
 def root():
-    return {"message": "AI知识库问答系统"}
+    return {
+        "message": "AI知识库问答系统",
+        "llm_ready": llm_service.is_ready(),
+    }
 
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "chunks_stored": vec_service.count()}
+    return {
+        "status": "ok",
+        "chunks_stored": vec_service.count(),
+        "llm_ready": llm_service.is_ready(),
+    }
 
 
 # ==================== 文档上传接口 ====================
@@ -84,35 +93,38 @@ async def list_documents():
     return DocumentListResponse(documents=documents, total=len(documents))
 
 
-# ==================== 问答接口（向量检索）====================
+# ==================== 问答接口（RAG 全链路）====================
 
 @app.post("/query", response_model=QueryResponse)
 async def query_knowledge(request: QueryRequest):
-    """根据问题检索知识库，返回相关文档片段"""
+    """RAG 问答：检索知识库 → LLM 生成回答"""
     if vec_service.count() == 0:
         raise HTTPException(status_code=400, detail="知识库为空，请先上传文档")
 
+    # 1. 检索相关文档片段
     result = vec_service.query(request.question, top_k=request.top_k)
-
-    # 拼接检索到的文档作为"答案"
     documents = result["documents"]
     metadatas = result["metadatas"]
 
-    if not documents or not documents[0]:
+    if not documents:
         return QueryResponse(
             question=request.question,
             answer="未找到相关内容",
             sources=[],
         )
 
-    # 列出来源文件（去重）
+    # 2. 列出来源文件（去重）
     sources = list(set(m["source"] for m in metadatas if m))
 
-    # 拼接多个相关片段作为答案上下文
-    context = "\n\n---\n\n".join(documents)
+    # 3. 用 LLM 基于检索结果生成回答
+    if llm_service.is_ready():
+        answer = llm_service.generate_answer(request.question, documents)
+    else:
+        # 未配置 API Key，退回为直接返回文档片段
+        answer = "⚠️ 请配置 DeepSeek API Key 以启用 AI 回答\n\n" + "\n\n---\n\n".join(documents)
 
     return QueryResponse(
         question=request.question,
-        answer=context,
+        answer=answer,
         sources=sources,
     )
