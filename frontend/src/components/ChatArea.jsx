@@ -50,10 +50,7 @@ export default function ChatArea({ conversationId, onConversationCreated }) {
 
     // 立即添加用户消息并标记加载中
     const userMsg = { role: 'user', content: question };
-    setMessages((prev) => {
-      console.log('添加用户消息:', question, '当前消息数:', prev.length);
-      return [...prev, userMsg];
-    });
+    setMessages((prev) => [...prev, userMsg]);
     setLoading(true);
 
     try {
@@ -73,10 +70,7 @@ export default function ChatArea({ conversationId, onConversationCreated }) {
         content: data.answer,
         sources: data.sources || [],
       };
-      setMessages((prev) => {
-        console.log('添加AI回答, 当前消息数:', prev.length);
-        return [...prev, botMsg];
-      });
+      setMessages((prev) => [...prev, botMsg]);
     } catch (err) {
       setMessages((prev) => [...prev, {
         role: 'assistant',
