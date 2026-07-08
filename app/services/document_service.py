@@ -1,4 +1,6 @@
-"""文档解析与分块服务"""
+"""文档解析与分块服务 —— 支持 PDF / TXT / MD / DOCX / CSV / HTML"""
+import csv
+import io
 import os
 from typing import List
 
@@ -14,48 +16,115 @@ class DocumentChunk:
         self.metadata = metadata
 
 
-class DocumentService:
-    """文档服务：负责 PDF 解析和文本分块"""
+# 支持的文件扩展名
+SUPPORTED_EXTENSIONS = {".pdf", ".txt", ".md", ".docx", ".csv", ".html", ".htm"}
 
-    # 分块参数
-    CHUNK_SIZE = 500       # 每个文本块的最大字符数
-    CHUNK_OVERLAP = 100    # 相邻块之间的重叠字符数
+
+class DocumentService:
+    """文档服务：多格式文档解析 + 文本分块"""
+
+    CHUNK_SIZE = 500
+    CHUNK_OVERLAP = 100
 
     def __init__(self, upload_dir: str = "uploads"):
         self.upload_dir = upload_dir
         os.makedirs(upload_dir, exist_ok=True)
 
-    def parse_pdf(self, file_path: str) -> str:
-        """解析 PDF 文件，提取全部文字"""
-        reader = PdfReader(file_path)
-        text_parts = []
+    # ─── 各格式解析器 ─────────────────────────────────
+
+    def _parse_pdf(self, path: str) -> str:
+        reader = PdfReader(path)
+        parts = []
         for page in reader.pages:
-            page_text = page.extract_text()
-            if page_text:
-                text_parts.append(page_text)
-        return "\n".join(text_parts)
+            t = page.extract_text()
+            if t:
+                parts.append(t)
+        return "\n".join(parts)
+
+    def _parse_txt(self, path: str) -> str:
+        # 尝试多种编码
+        for enc in ("utf-8", "gbk", "gb2312", "latin-1"):
+            try:
+                with open(path, encoding=enc) as f:
+                    return f.read()
+            except UnicodeDecodeError:
+                continue
+        return ""
+
+    def _parse_docx(self, path: str) -> str:
+        from docx import Document
+        doc = Document(path)
+        return "\n".join(p.text for p in doc.paragraphs if p.text)
+
+    def _parse_csv(self, path: str) -> str:
+        rows = []
+        for enc in ("utf-8", "gbk", "gb2312"):
+            try:
+                with open(path, encoding=enc, newline="") as f:
+                    reader = csv.reader(f)
+                    for r in reader:
+                        rows.append(" | ".join(r))
+                break
+            except (UnicodeDecodeError, csv.Error):
+                continue
+        return "\n".join(rows)
+
+    def _parse_html(self, path: str) -> str:
+        from bs4 import BeautifulSoup
+        with open(path, encoding="utf-8") as f:
+            soup = BeautifulSoup(f.read(), "lxml")
+        # 移除 script / style 标签
+        for tag in soup(["script", "style", "nav", "footer", "header"]):
+            tag.decompose()
+        return soup.get_text(separator="\n", strip=True)
+
+    # ─── 统一入口 ─────────────────────────────────────
+
+    def parse_file(self, file_path: str, filename: str) -> str:
+        """根据扩展名自动选择解析器，返回纯文本"""
+        ext = os.path.splitext(filename)[1].lower()
+        parsers = {
+            ".pdf": self._parse_pdf,
+            ".txt": self._parse_txt,
+            ".md": self._parse_txt,
+            ".docx": self._parse_docx,
+            ".csv": self._parse_csv,
+            ".html": self._parse_txt,
+            ".htm": self._parse_txt,
+        }
+        parser = parsers.get(ext)
+        if parser is None:
+            raise ValueError(f"不支持的文件格式: {ext}")
+        return parser(file_path)
+
+    # ─── 文本分块 ─────────────────────────────────────
 
     def chunk_text(self, text: str, filename: str) -> List[DocumentChunk]:
-        """将长文本切分成适合检索的小块"""
         splitter = RecursiveCharacterTextSplitter(
             chunk_size=self.CHUNK_SIZE,
             chunk_overlap=self.CHUNK_OVERLAP,
             separators=["\n\n", "\n", "。", "！", "？", "；", " ", ""],
             length_function=len,
         )
-
         chunks = splitter.split_text(text)
         return [
-            DocumentChunk(
-                content=chunk,
-                metadata={"source": filename, "chunk_index": i},
-            )
-            for i, chunk in enumerate(chunks)
+            DocumentChunk(content=c, metadata={"source": filename, "chunk_index": i})
+            for i, c in enumerate(chunks)
         ]
 
-    def process_pdf(self, file_path: str, filename: str) -> List[DocumentChunk]:
-        """处理 PDF 文件：解析 + 分块，一站式"""
-        text = self.parse_pdf(file_path)
+    # ─── 一站式处理 ───────────────────────────────────
+
+    def process_file(self, file_path: str, filename: str) -> List[DocumentChunk]:
+        """解析 + 分块，一站式"""
+        text = self.parse_file(file_path, filename)
         if not text.strip():
             return []
         return self.chunk_text(text, filename)
+
+    # ─── 兼容旧方法名 ─────────────────────────────────
+
+    def parse_pdf(self, path: str) -> str:
+        return self._parse_pdf(path)
+
+    def process_pdf(self, file_path: str, filename: str) -> List[DocumentChunk]:
+        return self.process_file(file_path, filename)

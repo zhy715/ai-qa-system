@@ -14,7 +14,7 @@ from app.models.schemas import (
     QueryRequest,
     QueryResponse,
 )
-from app.services.document_service import DocumentService
+from app.services.document_service import DocumentService, SUPPORTED_EXTENSIONS
 from app.services.vector_service import VectorService
 from app.services.llm_service import LLMService
 
@@ -54,26 +54,40 @@ def health():
 
 # ==================== 文档上传接口 ====================
 
+MAX_UPLOAD_SIZE = 20 * 1024 * 1024  # 20MB
+
+
 @app.post("/upload", response_model=DocumentUploadResponse)
 async def upload_document(file: UploadFile = File(...)):
     """上传 PDF 文档，解析、分块并存入向量数据库"""
     # 1. 校验文件类型
-    if not file.filename.endswith(".pdf"):
-        raise HTTPException(status_code=400, detail="仅支持 PDF 文件")
+    ext = os.path.splitext(file.filename)[1].lower()
+    if ext not in SUPPORTED_EXTENSIONS:
+        allowed = ", ".join(sorted(SUPPORTED_EXTENSIONS))
+        raise HTTPException(status_code=400, detail=f"不支持的文件格式，支持：{allowed}")
 
-    # 2. 保存到本地
+    # 2. 分块读取并校验大小
     file_path = os.path.join(doc_service.upload_dir, file.filename)
+    total_size = 0
     with open(file_path, "wb") as f:
-        content = await file.read()
-        f.write(content)
+        while chunk := await file.read(1024 * 1024):
+            total_size += len(chunk)
+            if total_size > MAX_UPLOAD_SIZE:
+                f.close()
+                os.remove(file_path)
+                raise HTTPException(
+                    status_code=413,
+                    detail=f"文件过大，最大支持 {MAX_UPLOAD_SIZE // 1024 // 1024}MB",
+                )
+            f.write(chunk)
 
-    # 3. 解析 PDF + 文本分块
-    chunks = doc_service.process_pdf(file_path, file.filename)
+    # 3. 解析文档 + 文本分块
+    chunks = doc_service.process_file(file_path, file.filename)
 
     if not chunks:
         # 清理空文件
         os.remove(file_path)
-        raise HTTPException(status_code=400, detail="PDF 无可提取的文字内容")
+        raise HTTPException(status_code=400, detail="文档无可提取的文字内容")
 
     # 4. 存入向量数据库
     count = vec_service.add_documents(chunks)

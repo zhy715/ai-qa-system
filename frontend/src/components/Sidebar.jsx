@@ -1,6 +1,150 @@
 import { useState, useRef, useEffect } from 'react';
-import { Upload, FileText, Database, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
+import { Upload, FileText, Database, CheckCircle2, AlertCircle, Loader2, Cloud } from 'lucide-react';
 import { uploadDocument, getDocuments } from '../api';
+
+const SIDEBAR_PX = 320;
+
+const styles = {
+  sidebar: {
+    width: SIDEBAR_PX,
+    minWidth: SIDEBAR_PX,
+    height: '100vh',
+    background: '#fafaf9',
+    borderRight: '1px solid #e8e6e1',
+    display: 'flex',
+    flexDirection: 'column',
+    padding: '24px 20px',
+    gap: 24,
+    overflowY: 'auto',
+    fontFamily: "'Inter', system-ui, -apple-system, sans-serif",
+  },
+  header: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 10,
+  },
+  logo: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 10,
+    fontSize: 17,
+    fontWeight: 600,
+    color: '#1a1a1a',
+    letterSpacing: '-0.01em',
+  },
+  statusRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  statusPill: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 4,
+    fontSize: 11,
+    padding: '3px 10px',
+    borderRadius: 100,
+    background: '#e8e6e1',
+    color: '#78716c',
+    fontWeight: 500,
+  },
+  statusOk: {
+    background: '#e0f2e9',
+    color: '#2d6a4f',
+  },
+  section: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 10,
+  },
+  sectionTitle: {
+    fontSize: 11,
+    fontWeight: 600,
+    color: '#a8a29e',
+    textTransform: 'uppercase',
+    letterSpacing: '0.06em',
+    margin: 0,
+  },
+  // Upload drop zone — BIG and OBVIOUS
+  uploadZone: {
+    border: '2px dashed #d6d3d1',
+    borderRadius: 12,
+    padding: '28px 16px',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: 10,
+    cursor: 'pointer',
+    background: '#fefefe',
+    transition: 'all 150ms ease',
+    textAlign: 'center',
+  },
+  uploadIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: '50%',
+    background: 'oklch(0.58 0.16 45 / 0.10)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    color: 'oklch(0.58 0.16 45)',
+  },
+  uploadText: {
+    fontSize: 14,
+    fontWeight: 500,
+    color: '#1a1a1a',
+    margin: 0,
+  },
+  uploadHint: {
+    fontSize: 12,
+    color: '#a8a29e',
+    margin: 0,
+  },
+  error: {
+    fontSize: 12,
+    color: '#dc2626',
+    margin: 0,
+    padding: '4px 8px',
+    background: '#fef2f2',
+    borderRadius: 6,
+  },
+  emptyText: {
+    fontSize: 13,
+    color: '#c4bfb8',
+    fontStyle: 'italic',
+    margin: 0,
+    padding: '8px 0',
+  },
+  docList: {
+    listStyle: 'none',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 2,
+    padding: 0,
+  },
+  docItem: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 10,
+    padding: '10px 12px',
+    borderRadius: 8,
+    fontSize: 13,
+    color: '#44403c',
+    transition: 'background 120ms',
+    cursor: 'default',
+  },
+  docIcon: {
+    color: '#a8a29e',
+    flexShrink: 0,
+  },
+  docName: {
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    fontWeight: 500,
+  },
+};
 
 export default function Sidebar({ onRefresh }) {
   const [documents, setDocuments] = useState([]);
@@ -8,15 +152,14 @@ export default function Sidebar({ onRefresh }) {
   const [error, setError] = useState('');
   const [llmReady, setLlmReady] = useState(null);
   const [chunks, setChunks] = useState(0);
+  const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef(null);
 
   const fetchDocs = async () => {
     try {
       const data = await getDocuments();
       setDocuments(data.documents || []);
-    } catch {
-      // backend may not be running
-    }
+    } catch { /* backend may be down */ }
   };
 
   const fetchHealth = async () => {
@@ -32,25 +175,51 @@ export default function Sidebar({ onRefresh }) {
 
   useEffect(() => { fetchDocs(); fetchHealth(); }, []);
 
-  const handleUpload = async (e) => {
-    const file = e.target.files?.[0];
+  const doUpload = async (file) => {
     if (!file) return;
-    if (!file.name.endsWith('.pdf')) {
-      setError('仅支持 PDF 文件');
+    const allowedExts = ['.pdf', '.txt', '.md', '.docx', '.csv', '.html', '.htm'];
+    const ext = '.' + file.name.split('.').pop().toLowerCase();
+    if (!allowedExts.includes(ext)) {
+      setError('仅支持 PDF / TXT / MD / DOCX / CSV / HTML');
       return;
     }
     setError('');
     setUploading(true);
     try {
       await uploadDocument(file);
+      setError('');
       await fetchDocs();
       await fetchHealth();
       if (onRefresh) onRefresh();
     } catch (err) {
-      setError(err.message);
+      setError(err.message || '上传失败');
     } finally {
       setUploading(false);
     }
+  };
+
+  const handleFileChange = (e) => doUpload(e.target.files?.[0]);
+
+  const handleDrag = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+  const handleDragIn = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(true);
+  };
+  const handleDragOut = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+  };
+  const handleDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+    const file = e.dataTransfer?.files?.[0];
+    doUpload(file);
   };
 
   return (
@@ -58,46 +227,62 @@ export default function Sidebar({ onRefresh }) {
       {/* Header */}
       <div style={styles.header}>
         <div style={styles.logo}>
-          <Database size={22} color="var(--color-primary)" />
-          <span style={styles.logoText}>知识库问答</span>
+          <Database size={20} color="oklch(0.58 0.16 45)" />
+          <span>知识库问答</span>
         </div>
         <div style={styles.statusRow}>
           {llmReady === null ? (
-            <span style={styles.statusPill}>检查中…</span>
+            <span style={styles.statusPill}>连接中…</span>
           ) : llmReady ? (
             <span style={{ ...styles.statusPill, ...styles.statusOk }}>
-              <CheckCircle2 size={12} /> AI 就绪
+              <CheckCircle2 size={11} /> AI 在线
             </span>
           ) : (
-            <span style={{ ...styles.statusPill, ...styles.statusWarn }}>
-              <AlertCircle size={12} /> 未配置 LLM
+            <span style={styles.statusPill}>
+              <AlertCircle size={11} /> LLM 未配置
             </span>
           )}
-          <span style={styles.chunkCount}>{chunks} 块</span>
+          <span style={{ fontSize: 11, color: '#a8a29e' }}>{chunks} 个文本块</span>
         </div>
       </div>
 
-      {/* Upload */}
+      {/* Upload Zone */}
       <div style={styles.section}>
+        <h2 style={styles.sectionTitle}>上传文档</h2>
         <input
           ref={fileInputRef}
           type="file"
-          accept=".pdf"
-          onChange={handleUpload}
+          accept=".pdf,.txt,.md,.docx,.csv,.html,.htm"
+          onChange={handleFileChange}
           style={{ display: 'none' }}
         />
-        <button
-          style={styles.uploadBtn}
+        <div
+          style={{
+            ...styles.uploadZone,
+            borderColor: isDragOver ? 'oklch(0.58 0.16 45)' : '#d6d3d1',
+            background: isDragOver ? 'oklch(0.58 0.16 45 / 0.05)' : '#fefefe',
+          }}
           onClick={() => fileInputRef.current?.click()}
-          disabled={uploading}
+          onDragEnter={handleDragIn}
+          onDragLeave={handleDragOut}
+          onDragOver={handleDrag}
+          onDrop={handleDrop}
         >
           {uploading ? (
-            <Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} />
+            <>
+              <Loader2 size={28} style={{ color: 'oklch(0.58 0.16 45)', animation: 'spin 1s linear infinite' }} />
+              <p style={styles.uploadText}>上传中…</p>
+            </>
           ) : (
-            <Upload size={18} />
+            <>
+              <div style={styles.uploadIconCircle}>
+                <Cloud size={24} />
+              </div>
+              <p style={styles.uploadText}>点击上传文档</p>
+              <p style={styles.uploadHint}>支持 PDF · DOCX · TXT · CSV · MD · HTML</p>
+            </>
           )}
-          <span>{uploading ? '上传中…' : '上传 PDF 文档'}</span>
-        </button>
+        </div>
         {error && <p style={styles.error}>{error}</p>}
       </div>
 
@@ -105,12 +290,12 @@ export default function Sidebar({ onRefresh }) {
       <div style={styles.section}>
         <h2 style={styles.sectionTitle}>已上传文档</h2>
         {documents.length === 0 ? (
-          <p style={styles.emptyText}>暂无文档，请上传 PDF</p>
+          <p style={styles.emptyText}>暂未上传任何文档</p>
         ) : (
           <ul style={styles.docList}>
             {documents.map((doc) => (
               <li key={doc.id} style={styles.docItem}>
-                <FileText size={16} style={styles.docIcon} />
+                <FileText size={14} style={styles.docIcon} />
                 <span style={styles.docName}>{doc.filename}</span>
               </li>
             ))}
@@ -122,123 +307,3 @@ export default function Sidebar({ onRefresh }) {
     </aside>
   );
 }
-
-const styles = {
-  sidebar: {
-    width: 'var(--sidebar-width)',
-    minWidth: 'var(--sidebar-width)',
-    height: '100vh',
-    background: 'var(--color-surface)',
-    borderRight: '1px solid var(--color-border)',
-    display: 'flex',
-    flexDirection: 'column',
-    padding: 'var(--space-6)',
-    gap: 'var(--space-6)',
-    overflowY: 'auto',
-  },
-  header: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 'var(--space-3)',
-  },
-  logo: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 'var(--space-3)',
-    fontSize: 'var(--text-lg)',
-    fontWeight: 600,
-    color: 'var(--color-ink)',
-    letterSpacing: '-0.01em',
-  },
-  logoText: {},
-  statusRow: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 'var(--space-2)',
-    flexWrap: 'wrap',
-  },
-  statusPill: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: '4px',
-    fontSize: 'var(--text-xs)',
-    padding: '2px 8px',
-    borderRadius: '100px',
-    background: 'var(--color-border)',
-    color: 'var(--color-muted)',
-  },
-  statusOk: {
-    background: 'oklch(0.58 0.13 155 / 0.15)',
-    color: 'oklch(0.45 0.11 155)',
-  },
-  statusWarn: {
-    background: 'oklch(0.65 0.14 80 / 0.15)',
-    color: 'oklch(0.50 0.12 80)',
-  },
-  chunkCount: {
-    fontSize: 'var(--text-xs)',
-    color: 'var(--color-muted)',
-  },
-  section: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 'var(--space-3)',
-  },
-  sectionTitle: {
-    fontSize: 'var(--text-sm)',
-    fontWeight: 600,
-    color: 'var(--color-muted)',
-    textTransform: 'uppercase',
-    letterSpacing: '0.05em',
-  },
-  uploadBtn: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 'var(--space-2)',
-    width: '100%',
-    padding: 'var(--space-4) var(--space-5)',
-    background: 'var(--color-primary)',
-    color: '#fff',
-    border: 'none',
-    borderRadius: 'var(--radius-md)',
-    fontSize: 'var(--text-sm)',
-    fontWeight: 500,
-    cursor: 'pointer',
-    transition: `background var(--duration-fast) var(--ease-out)`,
-  },
-  error: {
-    fontSize: 'var(--text-xs)',
-    color: 'var(--color-error)',
-  },
-  emptyText: {
-    fontSize: 'var(--text-sm)',
-    color: 'var(--color-faint)',
-    fontStyle: 'italic',
-  },
-  docList: {
-    listStyle: 'none',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 'var(--space-1)',
-  },
-  docItem: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 'var(--space-3)',
-    padding: 'var(--space-3) var(--space-4)',
-    borderRadius: 'var(--radius-sm)',
-    fontSize: 'var(--text-sm)',
-    transition: `background var(--duration-fast)`,
-    cursor: 'default',
-  },
-  docIcon: {
-    color: 'var(--color-muted)',
-    flexShrink: 0,
-  },
-  docName: {
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
-  },
-};

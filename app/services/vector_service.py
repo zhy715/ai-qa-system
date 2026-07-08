@@ -34,16 +34,26 @@ class VectorService:
         if not chunks:
             return 0
 
-        ids = [f"chunk_{self.collection.count() + i}" for i in range(len(chunks))]
-        documents = [chunk.content for chunk in chunks]
-        metadatas = [chunk.metadata for chunk in chunks]
+        # 过滤掉空白分块，避免 ChromaDB 报错
+        valid = [
+            (i, chunk)
+            for i, chunk in enumerate(chunks)
+            if chunk.content and chunk.content.strip()
+        ]
+        if not valid:
+            return 0
+
+        base = self.collection.count()
+        ids = [f"chunk_{base + j}" for j in range(len(valid))]
+        documents = [chunk.content.strip() for _, chunk in valid]
+        metadatas = [chunk.metadata for _, chunk in valid]
 
         self.collection.add(
             ids=ids,
             documents=documents,
             metadatas=metadatas,
         )
-        return len(chunks)
+        return len(valid)
 
     def query(self, question: str, top_k: int = 3) -> Dict[str, Any]:
         """根据问题检索最相关的文档片段"""
