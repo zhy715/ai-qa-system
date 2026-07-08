@@ -220,7 +220,7 @@ const styles = {
 
 export default function Sidebar({
   conversationId, onSelectConversation, onNewConversation,
-  viewingDocument, onViewDocument,
+  viewingDocument, onViewDocument, refreshSignal,
 }) {
   const [documents, setDocuments] = useState([]);
   const [conversations, setConversations] = useState([]);
@@ -258,10 +258,10 @@ export default function Sidebar({
 
   useEffect(() => { fetchDocs(); fetchHealth(); fetchConvs(); }, []);
 
-  // 每次上传后也刷新对话列表（当 ChatArea 产生新对话时，Sidebar 会被刷新）
+  // ChatArea 产生新对话时，refreshSignal 递增 → 刷新对话列表
   useEffect(() => {
-    if (conversationId !== undefined) fetchConvs();
-  }, [conversationId]);
+    fetchConvs();
+  }, [refreshSignal]);
 
   const doUpload = async (file) => {
     if (!file) return;

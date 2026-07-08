@@ -4,24 +4,26 @@ import ChatArea from './components/ChatArea';
 import DocumentViewer from './components/DocumentViewer';
 
 function App() {
-  // 当前活跃对话 ID
   const [conversationId, setConversationId] = useState(null);
-  const [refreshKey, setRefreshKey] = useState(0);
-  // 文档查看器状态
   const [viewingDocument, setViewingDocument] = useState(null);
+  // 递增此值通知 Sidebar 刷新对话列表（不触发 ChatArea 重挂载）
+  const [sidebarRefresh, setSidebarRefresh] = useState(0);
 
   const handleSelectConversation = useCallback((id) => {
     setConversationId(id);
-    setRefreshKey((k) => k + 1);
   }, []);
 
   const handleNewConversation = useCallback(() => {
     setConversationId(null);
-    setRefreshKey((k) => k + 1);
+  }, []);
+
+  // ChatArea 创建新对话后，通知 Sidebar 刷新列表，但不重挂载 ChatArea
+  const handleConversationCreated = useCallback((id) => {
+    setConversationId(id);
+    setSidebarRefresh((k) => k + 1);
   }, []);
 
   const handleViewDocument = useCallback((filename) => {
-    // 点同一个文档 → 关闭；点不同文档 → 切换
     setViewingDocument((prev) => (prev === filename ? null : filename));
   }, []);
 
@@ -37,11 +39,11 @@ function App() {
         onNewConversation={handleNewConversation}
         viewingDocument={viewingDocument}
         onViewDocument={handleViewDocument}
+        refreshSignal={sidebarRefresh}
       />
       <ChatArea
-        key={refreshKey}
         conversationId={conversationId}
-        onConversationCreated={handleSelectConversation}
+        onConversationCreated={handleConversationCreated}
       />
       <DocumentViewer
         filename={viewingDocument}

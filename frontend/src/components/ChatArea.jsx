@@ -9,9 +9,16 @@ export default function ChatArea({ conversationId, onConversationCreated }) {
   const [loading, setLoading] = useState(false);
   const [currentConvId, setCurrentConvId] = useState(conversationId);
   const messagesEndRef = useRef(null);
+  // 标记：是否由内部发送消息触发的 conversation 变更（避免重复加载覆盖消息）
+  const internalCreateRef = useRef(false);
 
-  // 切换对话时重新加载
+  // 外部切换对话时重新加载
   useEffect(() => {
+    // 内部创建的新对话 → 消息已由 handleSend 添加，不要覆盖
+    if (internalCreateRef.current) {
+      internalCreateRef.current = false;
+      return;
+    }
     setCurrentConvId(conversationId);
     if (conversationId) {
       loadConversation(conversationId);
@@ -47,9 +54,10 @@ export default function ChatArea({ conversationId, onConversationCreated }) {
     try {
       const data = await queryKnowledge(question, 3, currentConvId);
 
-      // 首次发送时后端会创建新对话，拿到 conversation_id
+      // 首次发送时后端创建新对话，返回 conversation_id
       if (data.conversation_id && !currentConvId) {
         setCurrentConvId(data.conversation_id);
+        internalCreateRef.current = true;  // 阻止 useEffect 重复加载
         if (onConversationCreated) onConversationCreated(data.conversation_id);
       }
 
