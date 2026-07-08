@@ -124,6 +124,19 @@ async def list_documents():
     return DocumentListResponse(documents=documents, total=len(documents))
 
 
+@app.get("/documents/{filename}/content")
+async def get_document_content(filename: str):
+    """获取已上传文档的完整文本内容"""
+    file_path = os.path.join(doc_service.upload_dir, filename)
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="文档不存在")
+    try:
+        text = doc_service.parse_file(file_path, filename)
+        return {"filename": filename, "content": text, "length": len(text)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"文档解析失败: {str(e)}")
+
+
 # ==================== 问答接口（RAG + 多轮对话）====================
 
 @app.post("/query", response_model=QueryResponse)

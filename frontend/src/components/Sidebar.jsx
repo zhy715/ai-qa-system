@@ -218,7 +218,10 @@ const styles = {
   },
 };
 
-export default function Sidebar({ conversationId, onSelectConversation, onNewConversation }) {
+export default function Sidebar({
+  conversationId, onSelectConversation, onNewConversation,
+  viewingDocument, onViewDocument,
+}) {
   const [documents, setDocuments] = useState([]);
   const [conversations, setConversations] = useState([]);
   const [uploading, setUploading] = useState(false);
@@ -435,12 +438,27 @@ export default function Sidebar({ conversationId, onSelectConversation, onNewCon
           <p style={styles.emptyText}>暂未上传任何文档</p>
         ) : (
           <ul style={styles.docList}>
-            {documents.map((doc) => (
-              <li key={doc.id} style={styles.docItem}>
-                <FileText size={14} style={styles.docIcon} />
-                <span style={styles.docName}>{doc.filename}</span>
-              </li>
-            ))}
+            {documents.map((doc) => {
+              const isActive = viewingDocument === doc.filename;
+              return (
+                <li
+                  key={doc.id}
+                  style={{
+                    ...styles.docItem,
+                    background: isActive ? '#f0ede8' : 'transparent',
+                    cursor: 'pointer',
+                  }}
+                  onClick={() => onViewDocument(doc.filename)}
+                  title="点击查看文档内容"
+                >
+                  <FileText size={14} style={{
+                    ...styles.docIcon,
+                    color: isActive ? 'oklch(0.58 0.16 45)' : '#a8a29e',
+                  }} />
+                  <span style={styles.docName}>{doc.filename}</span>
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>
