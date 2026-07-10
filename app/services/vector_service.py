@@ -1,5 +1,9 @@
 """向量数据库服务"""
 import os
+
+# 国内网络环境：强制离线模式，阻止 sentence-transformers 每次启动尝试连 Hugging Face
+os.environ.setdefault("HF_HUB_OFFLINE", "1")
+
 from typing import List, Dict, Any
 
 import chromadb
