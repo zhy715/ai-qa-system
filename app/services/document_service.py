@@ -23,8 +23,9 @@ SUPPORTED_EXTENSIONS = {".pdf", ".txt", ".md", ".docx", ".csv", ".html", ".htm"}
 class DocumentService:
     """文档服务：多格式文档解析 + 文本分块"""
 
-    CHUNK_SIZE = 500
-    CHUNK_OVERLAP = 100
+    # 网格搜索最优参数（在 24914 字学术论文上评估得出）
+    CHUNK_SIZE = 1000
+    CHUNK_OVERLAP = 50
 
     def __init__(self, upload_dir: str = "uploads"):
         self.upload_dir = upload_dir
