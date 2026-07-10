@@ -144,13 +144,14 @@ export default function ChatArea({ conversationId, onConversationCreated }) {
           <button
             style={{
               ...styles.sendBtn,
-              opacity: input.trim() && !loading ? 1 : 0.4,
+              opacity: input.trim() && !loading ? 1 : 0.35,
               cursor: input.trim() && !loading ? 'pointer' : 'default',
             }}
             onClick={handleSend}
             disabled={!input.trim() || loading}
           >
-            <Send size={18} />
+            <Send size={16} />
+            <span>发送</span>
           </button>
         </div>
       </div>
@@ -269,12 +270,16 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    width: 40,
-    height: 40,
+    gap: 6,
+    padding: '0 16px',
+    height: 38,
     borderRadius: 'var(--radius-md)',
     border: 'none',
     background: 'var(--color-primary)',
     color: '#fff',
+    fontSize: 14,
+    fontWeight: 500,
+    whiteSpace: 'nowrap',
     transition: `all var(--duration-fast) var(--ease-out)`,
   },
 };
