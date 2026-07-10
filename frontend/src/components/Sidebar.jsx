@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import {
-  Upload, FileText, Database, CheckCircle2, AlertCircle, Loader2, Cloud,
+  Upload, FileText, Scale, CheckCircle2, AlertCircle, Loader2, Cloud,
   MessageSquare, Plus, Trash2,
 } from 'lucide-react';
 import { uploadDocument, getDocuments, getConversations, deleteConversation } from '../api';
@@ -334,8 +334,8 @@ export default function Sidebar({
       {/* Header */}
       <div style={styles.header}>
         <div style={styles.logo}>
-          <Database size={20} color="oklch(0.58 0.16 45)" />
-          <span>知识库问答</span>
+          <Scale size={20} color="oklch(0.58 0.16 45)" />
+          <span>律答 AI</span>
         </div>
         <div style={styles.statusRow}>
           {llmReady === null ? (
@@ -392,7 +392,7 @@ export default function Sidebar({
 
       {/* Upload Zone */}
       <div style={styles.section}>
-        <h2 style={styles.sectionTitle}>上传文档</h2>
+        <h2 style={styles.sectionTitle}>上传法律文件</h2>
         <input
           ref={fileInputRef}
           type="file"
@@ -422,8 +422,8 @@ export default function Sidebar({
               <div style={styles.uploadIconCircle}>
                 <Cloud size={24} />
               </div>
-              <p style={styles.uploadText}>点击上传文档</p>
-              <p style={styles.uploadHint}>支持 PDF · DOCX · TXT · CSV · MD · HTML</p>
+              <p style={styles.uploadText}>上传法律文件</p>
+              <p style={styles.uploadHint}>PDF · DOCX · TXT · CSV · MD · HTML</p>
             </>
           )}
         </div>
@@ -432,9 +432,9 @@ export default function Sidebar({
 
       {/* Document List */}
       <div style={styles.section}>
-        <h2 style={styles.sectionTitle}>已上传文档</h2>
+        <h2 style={styles.sectionTitle}>已上传法律文件</h2>
         {documents.length === 0 ? (
-          <p style={styles.emptyText}>暂未上传任何文档</p>
+          <p style={styles.emptyText}>暂未上传任何法律文件</p>
         ) : (
           <ul style={styles.docList}>
             {documents.map((doc) => {

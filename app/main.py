@@ -22,7 +22,7 @@ from app.services.vector_service import VectorService
 from app.services.llm_service import LLMService
 from app.services.conversation_service import ConversationService
 
-app = FastAPI(title="AI知识库问答系统", version="0.4.0")
+app = FastAPI(title="律答 AI - 智能法律咨询助手", version="1.0.0")
 
 # CORS — 允许前端跨域访问
 app.add_middleware(
@@ -43,7 +43,7 @@ conv_service = ConversationService(data_dir="conversations")
 @app.get("/")
 def root():
     return {
-        "message": "AI知识库问答系统",
+        "message": "律答 AI - 智能法律咨询助手",
         "llm_ready": llm_service.is_ready(),
     }
 

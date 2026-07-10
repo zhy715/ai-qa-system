@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Send, Loader2, MessageSquare } from 'lucide-react';
+import { Send, Loader2, Scale } from 'lucide-react';
 import ChatMessage from './ChatMessage';
 import { queryKnowledge, getConversation } from '../api';
 
@@ -97,16 +97,16 @@ export default function ChatArea({ conversationId, onConversationCreated }) {
         {messages.length === 0 ? (
           <div style={styles.welcome}>
             <div style={styles.welcomeIcon}>
-              <MessageSquare size={40} strokeWidth={1.5} />
+              <Scale size={40} strokeWidth={1.5} />
             </div>
-            <h1 style={styles.welcomeTitle}>开始提问</h1>
+            <h1 style={styles.welcomeTitle}>律答 AI · 智能法律咨询</h1>
             <p style={styles.welcomeText}>
-              上传 PDF 文档后，在此输入问题<br />
-              系统会从知识库中检索相关内容并生成回答
+              上传法律法规、合同模板、裁判文书等法律文件<br />
+              AI 将基于文件内容为您提供专业法律解答
             </p>
             <div style={styles.tips}>
               <span style={styles.tip}>💡 试试：</span>
-              {['这份文档讲了什么？', '总结核心要点', '有哪些关键概念？'].map((q) => (
+              {['劳动合同解除需要什么条件？', '这份合同的违约责任如何认定？', '民法典对隐私权有哪些规定？'].map((q) => (
                 <button
                   key={q}
                   style={styles.tipBtn}
@@ -137,7 +137,7 @@ export default function ChatArea({ conversationId, onConversationCreated }) {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="输入你的问题… (Enter 发送)"
+            placeholder="输入法律问题… (Enter 发送)"
             rows={1}
             disabled={loading}
           />
