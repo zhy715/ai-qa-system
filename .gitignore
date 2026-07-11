@@ -12,3 +12,6 @@ conversations/
 test.pdf
 frontend/node_modules/
 frontend/dist/
+*.docx
+*.pdf
+generate_resume.py

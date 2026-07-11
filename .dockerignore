@@ -1,0 +1,30 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+.venv/
+
+# 运行时数据（由 volume 管理）
+chroma_db/
+uploads/
+conversations/
+
+# Git
+.git/
+.gitignore
+
+# 前端（后端镜像不需要）
+frontend/
+
+# 测试和临时文件
+eval_*
+test_*
+*.docx
+*.pdf
+
+# IDE
+.vscode/
+.idea/
+
+# 环境（docker-compose 通过 env_file 注入）
+.env

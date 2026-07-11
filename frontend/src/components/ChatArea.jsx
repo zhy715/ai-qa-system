@@ -74,7 +74,7 @@ export default function ChatArea({ conversationId, onConversationCreated }) {
     } catch (err) {
       setMessages((prev) => [...prev, {
         role: 'assistant',
-        content: `❌ 请求失败：${err.message}\n\n请确认后端服务已启动（http://localhost:8000）`,
+        content: `❌ 请求失败：${err.message}\n\n请确认后端服务已启动`,
         sources: [],
         isError: true,
       }]);

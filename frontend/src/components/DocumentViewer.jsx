@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { X, Loader2, FileText } from 'lucide-react';
+import { API_BASE } from '../api/config';
 
 const MIN_WIDTH = 280;
 const MAX_WIDTH = 800;
@@ -18,7 +19,7 @@ export default function DocumentViewer({ filename, onClose }) {
     if (!filename) return;
     setLoading(true);
     setError('');
-    fetch(`http://localhost:8000/documents/${encodeURIComponent(filename)}/content`)
+    fetch(`${API_BASE}/documents/${encodeURIComponent(filename)}/content`)
       .then((r) => {
         if (!r.ok) throw new Error('加载失败');
         return r.json();

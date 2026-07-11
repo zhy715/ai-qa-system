@@ -4,6 +4,7 @@ import {
   MessageSquare, Plus, Trash2,
 } from 'lucide-react';
 import { uploadDocument, getDocuments, getConversations, deleteConversation } from '../api';
+import { API_BASE } from '../api/config';
 
 const SIDEBAR_PX = 320;
 
@@ -240,7 +241,7 @@ export default function Sidebar({
 
   const fetchHealth = async () => {
     try {
-      const res = await fetch('http://localhost:8000/health');
+      const res = await fetch(`${API_BASE}/health`);
       const data = await res.json();
       setLlmReady(data.llm_ready);
       setChunks(data.chunks_stored || 0);

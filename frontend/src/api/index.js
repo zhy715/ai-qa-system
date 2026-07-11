@@ -1,10 +1,8 @@
-/** API 请求层 — 与 FastAPI 后端通信 */
-
-const BASE_URL = 'http://localhost:8000';
+/** API 请求层 — 开发走 Vite 代理，Docker 走 nginx 代理 */
+import { API_BASE } from './config';
 
 async function request(path, options = {}) {
-  const url = `${BASE_URL}${path}`;
-  const res = await fetch(url, {
+  const res = await fetch(`${API_BASE}${path}`, {
     headers: { 'Content-Type': 'application/json', ...options.headers },
     ...options,
   });
@@ -15,11 +13,11 @@ async function request(path, options = {}) {
   return res.json();
 }
 
-/** 上传 PDF 文档 */
+/** 上传文档 */
 export async function uploadDocument(file) {
   const formData = new FormData();
   formData.append('file', file);
-  const res = await fetch(`${BASE_URL}/upload`, {
+  const res = await fetch(`${API_BASE}/upload`, {
     method: 'POST',
     body: formData,
   });
