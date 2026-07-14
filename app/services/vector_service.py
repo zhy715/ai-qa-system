@@ -1,4 +1,5 @@
 """向量数据库服务"""
+import logging
 import os
 
 # 国内网络环境：强制离线模式，阻止 sentence-transformers 每次启动尝试连 Hugging Face
@@ -8,6 +9,8 @@ from typing import List, Dict, Any
 
 import chromadb
 from chromadb.utils import embedding_functions
+
+logger = logging.getLogger("lvda.vector")
 
 
 class VectorService:
@@ -66,6 +69,7 @@ class VectorService:
             documents=documents,
             metadatas=metadatas,
         )
+        logger.info("向量入库: %d 个块, 来源=%s", len(valid), metadatas[0].get("source", "unknown") if metadatas else "unknown")
         return len(valid)
 
     def query(self, question: str, top_k: int = 3) -> Dict[str, Any]:
@@ -98,6 +102,21 @@ class VectorService:
             if meta and "source" in meta:
                 sources.add(meta["source"])
         return list(sources)
+
+    def delete_by_source(self, source: str) -> int:
+        """按 source 文件名删除向量库中的所有相关分块"""
+        if self.collection.count() == 0:
+            return 0
+
+        # 获取所有匹配 source 的记录 ID
+        result = self.collection.get(
+            where={"source": source},
+        )
+        ids = result.get("ids", [])
+        if ids:
+            self.collection.delete(ids=ids)
+            logger.info("删除向量分块: source=%s, 共 %d 个", source, len(ids))
+        return len(ids)
 
     def count(self) -> int:
         """返回当前存储的分块数量"""

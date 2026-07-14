@@ -88,8 +88,13 @@ class DocumentService:
 
     def _parse_html(self, path: str) -> str:
         from bs4 import BeautifulSoup
-        with open(path, encoding="utf-8") as f:
-            soup = BeautifulSoup(f.read(), "lxml")
+        for enc in ("utf-8", "gbk", "gb2312", "latin-1"):
+            try:
+                with open(path, encoding=enc) as f:
+                    soup = BeautifulSoup(f.read(), "lxml")
+                break
+            except (UnicodeDecodeError, UnicodeError):
+                continue
         # 移除 script / style 标签
         for tag in soup(["script", "style", "nav", "footer", "header"]):
             tag.decompose()
@@ -106,8 +111,8 @@ class DocumentService:
             ".md": self._parse_txt,
             ".docx": self._parse_docx,
             ".csv": self._parse_csv,
-            ".html": self._parse_txt,
-            ".htm": self._parse_txt,
+            ".html": self._parse_html,
+            ".htm": self._parse_html,
         }
         parser = parsers.get(ext)
         if parser is None:

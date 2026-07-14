@@ -1,6 +1,7 @@
 """对话管理服务 —— JSON 文件持久化"""
 import json
 import os
+import threading
 import uuid
 from datetime import datetime, timezone
 
@@ -13,6 +14,15 @@ class ConversationService:
     def __init__(self, data_dir: str = "conversations"):
         self.data_dir = data_dir
         os.makedirs(data_dir, exist_ok=True)
+        self._locks: dict[str, threading.Lock] = {}
+        self._locks_lock = threading.Lock()  # 保护 _locks 字典本身
+
+    def _get_lock(self, cid: str) -> threading.Lock:
+        """获取对话文件对应的锁（线程安全懒创建）"""
+        with self._locks_lock:
+            if cid not in self._locks:
+                self._locks[cid] = threading.Lock()
+            return self._locks[cid]
 
     def _path(self, cid: str) -> str:
         return os.path.join(self.data_dir, f"{cid}.json")
@@ -71,25 +81,27 @@ class ConversationService:
 
     def add_message(self, cid: str, role: str, content: str,
                     sources: list[str] | None = None) -> bool:
-        data = self._load(cid)
-        if not data:
-            return False
+        lock = self._get_lock(cid)
+        with lock:
+            data = self._load(cid)
+            if not data:
+                return False
 
-        data["messages"].append({
-            "role": role,
-            "content": content,
-            "sources": sources or [],
-        })
-        data["updated_at"] = datetime.now(timezone.utc).isoformat()
+            data["messages"].append({
+                "role": role,
+                "content": content,
+                "sources": sources or [],
+            })
+            data["updated_at"] = datetime.now(timezone.utc).isoformat()
 
-        # 用第一条用户消息自动更新标题
-        if data["title"] == "新对话":
-            for m in data["messages"]:
-                if m["role"] == "user":
-                    data["title"] = m["content"][:30]
-                    break
+            # 用第一条用户消息自动更新标题
+            if data["title"] == "新对话":
+                for m in data["messages"]:
+                    if m["role"] == "user":
+                        data["title"] = m["content"][:30]
+                        break
 
-        self._save(cid, data)
+            self._save(cid, data)
         return True
 
     def get_messages(self, cid: str, limit: int = 10) -> list[ConversationMessage]:
@@ -107,4 +119,7 @@ class ConversationService:
         if not os.path.exists(path):
             return False
         os.remove(path)
+        # 清理锁对象
+        with self._locks_lock:
+            self._locks.pop(cid, None)
         return True

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { Send, Loader2, Scale } from 'lucide-react';
 import ChatMessage from './ChatMessage';
 import { queryKnowledge, getConversation } from '../api';
@@ -11,6 +11,8 @@ export default function ChatArea({ conversationId, onConversationCreated }) {
   const messagesEndRef = useRef(null);
   // 标记：是否由内部发送消息触发的 conversation 变更（避免重复加载覆盖消息）
   const internalCreateRef = useRef(false);
+  // 消息 ID 计数器，确保每条消息有唯一 key
+  const msgIdRef = useRef(0);
 
   // 外部切换对话时重新加载
   useEffect(() => {
@@ -30,7 +32,11 @@ export default function ChatArea({ conversationId, onConversationCreated }) {
   const loadConversation = async (id) => {
     try {
       const data = await getConversation(id);
-      setMessages(data.messages || []);
+      const msgs = (data.messages || []).map((m, i) => ({
+        ...m,
+        _key: `load-${i}-${msgIdRef.current++}`,
+      }));
+      setMessages(msgs);
     } catch {
       setMessages([]);
     }
@@ -49,7 +55,7 @@ export default function ChatArea({ conversationId, onConversationCreated }) {
     setInput('');
 
     // 立即添加用户消息并标记加载中
-    const userMsg = { role: 'user', content: question };
+    const userMsg = { role: 'user', content: question, _key: `msg-${msgIdRef.current++}` };
     setMessages((prev) => [...prev, userMsg]);
     setLoading(true);
 
@@ -69,6 +75,7 @@ export default function ChatArea({ conversationId, onConversationCreated }) {
         role: 'assistant',
         content: data.answer,
         sources: data.sources || [],
+        _key: `msg-${msgIdRef.current++}`,
       };
       setMessages((prev) => [...prev, botMsg]);
     } catch (err) {
@@ -77,6 +84,7 @@ export default function ChatArea({ conversationId, onConversationCreated }) {
         content: `❌ 请求失败：${err.message}\n\n请确认后端服务已启动`,
         sources: [],
         isError: true,
+        _key: `msg-${msgIdRef.current++}`,
       }]);
     } finally {
       setLoading(false);
@@ -118,7 +126,7 @@ export default function ChatArea({ conversationId, onConversationCreated }) {
             </div>
           </div>
         ) : (
-          messages.map((msg, i) => <ChatMessage key={i} message={msg} />)
+          messages.map((msg) => <ChatMessage key={msg._key} message={msg} />)
         )}
         {loading && (
           <div style={styles.typing}>
@@ -271,7 +279,7 @@ const styles = {
     height: 38,
     borderRadius: 10,
     border: 'none',
-    background: '#e8602c',
+    background: 'var(--color-primary, #e8602c)',
     color: '#fff',
     fontSize: 14,
     fontWeight: 500,

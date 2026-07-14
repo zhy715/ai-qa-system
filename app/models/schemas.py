@@ -1,5 +1,5 @@
 """数据模型定义"""
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class DocumentUploadResponse(BaseModel):
@@ -22,11 +22,32 @@ class DocumentListResponse(BaseModel):
     total: int
 
 
+class DeleteDocumentResponse(BaseModel):
+    """文档删除响应"""
+    filename: str
+    deleted_chunks: int
+    message: str
+
+
 class QueryRequest(BaseModel):
     """查询请求"""
-    question: str
-    top_k: int = 3
-    conversation_id: str | None = None  # 多轮对话 ID，为空则新建
+    question: str = Field(
+        ...,
+        min_length=1,
+        max_length=2000,
+        description="用户问题，1-2000 字符",
+    )
+    top_k: int = Field(
+        default=3,
+        ge=1,
+        le=10,
+        description="检索返回的最相关文档块数量，1-10",
+    )
+    conversation_id: str | None = Field(
+        default=None,
+        max_length=64,
+        description="多轮对话 ID，为空则新建",
+    )
 
 
 class QueryResponse(BaseModel):
