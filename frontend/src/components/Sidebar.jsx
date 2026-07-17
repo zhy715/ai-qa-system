@@ -1,9 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
 import {
   Upload, FileText, Scale, CheckCircle2, AlertCircle, Loader2, Cloud,
-  MessageSquare, Plus, Trash2,
+  MessageSquare, Plus, Trash2, Pin,
 } from 'lucide-react';
-import { uploadDocument, getDocuments, getConversations, deleteConversation } from '../api';
+import { uploadDocument, getDocuments, getConversations, deleteConversation, deleteDocument } from '../api';
 import { API_BASE } from '../api/config';
 
 const SIDEBAR_PX = 320;
@@ -319,6 +319,17 @@ export default function Sidebar({
     } catch { /* ok */ }
   };
 
+  const handleDeleteDoc = async (e, filename) => {
+    e.stopPropagation();
+    if (!confirm(`确定要删除「${filename}」吗？`)) return;
+    try {
+      await deleteDocument(filename);
+      fetchDocs();
+      fetchHealth();
+      if (viewingDocument === filename) onViewDocument(null);
+    } catch { /* ok */ }
+  };
+
   const dateLabel = (iso) => {
     try {
       const d = new Date(iso);
@@ -433,13 +444,14 @@ export default function Sidebar({
 
       {/* Document List */}
       <div style={styles.section}>
-        <h2 style={styles.sectionTitle}>已上传法律文件</h2>
+        <h2 style={styles.sectionTitle}>法律文件</h2>
         {documents.length === 0 ? (
           <p style={styles.emptyText}>暂未上传任何法律文件</p>
         ) : (
           <ul style={styles.docList}>
             {documents.map((doc) => {
               const isActive = viewingDocument === doc.filename;
+              const isBuiltin = doc.source_type === 'builtin';
               return (
                 <li
                   key={doc.id}
@@ -449,13 +461,23 @@ export default function Sidebar({
                     cursor: 'pointer',
                   }}
                   onClick={() => onViewDocument(doc.filename)}
-                  title="点击查看文档内容"
+                  title={isBuiltin ? '内置文档（点击查看）' : '点击查看文档内容'}
                 >
-                  <FileText size={14} style={{
-                    ...styles.docIcon,
-                    color: isActive ? 'oklch(0.58 0.16 45)' : '#a8a29e',
-                  }} />
+                  {isBuiltin ? (
+                    <Pin size={14} style={{ ...styles.docIcon, color: isActive ? 'oklch(0.58 0.16 45)' : '#a8a29e' }} />
+                  ) : (
+                    <FileText size={14} style={{ ...styles.docIcon, color: isActive ? 'oklch(0.58 0.16 45)' : '#a8a29e' }} />
+                  )}
                   <span style={styles.docName}>{doc.filename}</span>
+                  {!isBuiltin && (
+                    <button
+                      style={styles.deleteBtn}
+                      onClick={(e) => handleDeleteDoc(e, doc.filename)}
+                      title="删除"
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  )}
                 </li>
               );
             })}

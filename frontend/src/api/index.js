@@ -33,6 +33,11 @@ export function getDocuments() {
   return request('/documents');
 }
 
+/** 删除文档 */
+export function deleteDocument(filename) {
+  return request(`/documents/${encodeURIComponent(filename)}`, { method: 'DELETE' });
+}
+
 /** RAG 问答（支持多轮对话） */
 export function queryKnowledge(question, topK = 3, conversationId = null) {
   return request('/query', {

@@ -23,6 +23,7 @@ from app.services.document_service import DocumentService, SUPPORTED_EXTENSIONS
 from app.services.vector_service import VectorService
 from app.services.llm_service import LLMService
 from app.services.conversation_service import ConversationService
+from app.services.seed_service import SeedService
 
 # ── 日志配置 ─────────────────────────────────────────
 logging.basicConfig(
@@ -48,8 +49,16 @@ doc_service = DocumentService(upload_dir="uploads")
 vec_service = VectorService(persist_dir="chroma_db")
 llm_service = LLMService()
 conv_service = ConversationService(data_dir="conversations")
+BUILTIN_DIR = "builtin_docs"
 
 logger.info("律答 AI 启动完成, LLM就绪=%s, 向量库块数=%d", llm_service.is_ready(), vec_service.count())
+
+
+@app.on_event("startup")
+async def seed_builtin_docs():
+    """启动时自动索引内置文档目录中的新文档"""
+    seed = SeedService(BUILTIN_DIR, doc_service, vec_service)
+    seed.seed()
 
 
 # ── 简单速率限制中间件 ──────────────────────────────
@@ -135,10 +144,13 @@ async def upload_document(file: UploadFile = File(...)):
         allowed = ", ".join(sorted(SUPPORTED_EXTENSIONS))
         raise HTTPException(status_code=400, detail=f"不支持的文件格式，支持：{allowed}")
 
-    # 2. 去重检查
+    # 2. 去重检查（含内置文档）
     existing = vec_service.get_all_sources()
     if safe_name in existing:
         raise HTTPException(status_code=409, detail=f"文档 '{safe_name}' 已存在，请勿重复上传")
+    builtin_path = os.path.join(BUILTIN_DIR, safe_name)
+    if os.path.exists(builtin_path):
+        raise HTTPException(status_code=409, detail=f"与内置文档 '{safe_name}' 同名，无法上传")
 
     # 3. 分块读取并校验大小
     file_path = os.path.join(doc_service.upload_dir, safe_name)
@@ -187,17 +199,18 @@ async def upload_document(file: UploadFile = File(...)):
 
 @app.get("/documents", response_model=DocumentListResponse)
 async def list_documents():
-    """列出已上传的所有文档"""
-    sources = vec_service.get_all_sources()
+    """列出所有文档（含内置文档和上传文档）"""
+    sources = vec_service.get_all_sources_with_type()
     documents: List[DocumentInfo] = []
-    for source in sources:
-        # 去掉所有扩展名作为 ID
+    for item in sources:
+        source = item["source"]
         doc_id = os.path.splitext(source)[0]
         documents.append(
             DocumentInfo(
                 id=doc_id,
                 filename=source,
                 source=source,
+                source_type=item["source_type"],
             )
         )
     return DocumentListResponse(documents=documents, total=len(documents))
@@ -205,10 +218,14 @@ async def list_documents():
 
 @app.get("/documents/{filename}/content")
 async def get_document_content(filename: str):
-    """获取已上传文档的完整文本内容"""
+    """获取文档的完整文本内容（支持上传文档和内置文档）"""
     # 安全：清洗文件名
     safe_name = _safe_filename(filename)
+
+    # 先查上传目录，再查内置文档目录
     file_path = os.path.join(doc_service.upload_dir, safe_name)
+    if not os.path.exists(file_path):
+        file_path = os.path.join(BUILTIN_DIR, safe_name)
     if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="文档不存在")
     try:
@@ -223,8 +240,13 @@ async def get_document_content(filename: str):
 
 @app.delete("/documents/{filename}", response_model=DeleteDocumentResponse)
 async def delete_document(filename: str):
-    """删除指定文档及其在向量库中的所有分块"""
+    """删除指定文档及其在向量库中的所有分块（禁止删除内置文档）"""
     safe_name = _safe_filename(filename)
+
+    # 检查是否为内置文档
+    builtin_path = os.path.join(BUILTIN_DIR, safe_name)
+    if os.path.exists(builtin_path):
+        raise HTTPException(status_code=403, detail="内置文档不可删除，请从 builtin_docs/ 目录移除后重启服务")
 
     # 删除向量库中的分块
     deleted_chunks = vec_service.delete_by_source(safe_name)
@@ -262,13 +284,25 @@ async def query_knowledge(request: QueryRequest):
     elif not conv_service.get(conversation_id):
         raise HTTPException(status_code=404, detail=f"对话不存在: {conversation_id}")
 
-    # 1. 检索相关文档片段
-    result = vec_service.query(request.question, top_k=request.top_k)
+    # 1. 初检：用嵌入向量召回 top-20 作为重排候选池
+    RETRIEVAL_POOL = 20
+    result = vec_service.query(request.question, top_k=RETRIEVAL_POOL)
     documents = result["documents"]
     metadatas = result["metadatas"]
     distances = result["distances"]
 
-    # 1a. 相似度阈值过滤：距离超过阈值的视为不相关
+    # 1a. LLM 精排：从候选池中挑出最相关的 top_k 个
+    if llm_service.is_ready() and len(documents) > request.top_k:
+        reranked_idx = llm_service.rerank(request.question, documents, request.top_k)
+        documents = [documents[i] for i in reranked_idx]
+        metadatas = [metadatas[i] for i in reranked_idx]
+        distances = [distances[i] for i in reranked_idx]
+        logger.info(
+            "精排完成: %d → %d, 索引=%s",
+            len(result["documents"]), len(documents), reranked_idx,
+        )
+
+    # 1b. 相似度阈值过滤：距离超过阈值的视为不相关
     if distances:
         filtered = [
             (doc, meta, dist)

@@ -14,6 +14,7 @@ class DocumentInfo(BaseModel):
     id: str
     filename: str
     source: str
+    source_type: str = "uploaded"  # "builtin" | "uploaded"
 
 
 class DocumentListResponse(BaseModel):

@@ -19,7 +19,7 @@ class VectorService:
     使用 ChromaDB + 多语言 sentence-transformers 模型，支持中英文语义检索。
     """
 
-    MULTILINGUAL_MODEL = "paraphrase-multilingual-MiniLM-L12-v2"
+    MULTILINGUAL_MODEL = "BAAI/bge-base-zh-v1.5"  # 1024→768维，中文 MTEB Top 3
 
     def __init__(self, persist_dir: str = "chroma_db"):
         self.persist_dir = persist_dir
@@ -33,7 +33,8 @@ class VectorService:
         )
 
         # 集合名加上模型后缀，避免和旧英文模型的向量维度不兼容
-        collection_name = "knowledge_base_multilingual"
+        # 集合名含模型标识，避免不同维度模型之间冲突
+        collection_name = "knowledge_base_bge_zh"
         try:
             self.client.delete_collection("knowledge_base")
         except Exception:
@@ -102,6 +103,21 @@ class VectorService:
             if meta and "source" in meta:
                 sources.add(meta["source"])
         return list(sources)
+
+    def get_all_sources_with_type(self) -> List[dict]:
+        """获取所有已存储的文档来源及其类型，每项含 source 和 source_type"""
+        if self.collection.count() == 0:
+            return []
+
+        result = self.collection.get()
+        metadatas = result.get("metadatas", [])
+        seen = {}  # source -> source_type (取第一条记录的类型)
+        for meta in metadatas:
+            if meta and "source" in meta:
+                source = meta["source"]
+                if source not in seen:
+                    seen[source] = meta.get("source_type", "uploaded")
+        return [{"source": s, "source_type": t} for s, t in seen.items()]
 
     def delete_by_source(self, source: str) -> int:
         """按 source 文件名删除向量库中的所有相关分块"""
